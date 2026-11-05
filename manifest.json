@@ -1,0 +1,110 @@
+{
+    "id": "cmspro.polling",
+    "name": "投票系统",
+    "description": "多活动用户投票系统，支持单选/多选/排序投票、防刷票、匿名投票与实时统计，适用于问卷调查、社区话题决策、活动评选等场景",
+    "version": "1.0.0",
+    "icon": "fa fa-check-square-o",
+    "author": "CmsPro",
+    "require": {
+        "php": ">=8.3",
+        "cmspro": ">=5.0.0"
+    },
+    "dependencies": {
+        "app_ids": [],
+        "versions": {}
+    },
+    "providers": [
+        "ServiceProvider"
+    ],
+    "hooks": "Hooks",
+    "install": "Install",
+    "menus": [
+        {
+            "title": "投票管理",
+            "icon": "fa fa-check-square-o",
+            "code": "admin_cmspro_polling",
+            "order": 83,
+            "children": [
+                {
+                    "title": "活动管理",
+                    "icon": "fa fa-tasks",
+                    "path": "/admin/cmspro/polling/activities",
+                    "code": "admin_cmspro_polling_activities",
+                    "order": 1
+                },
+                {
+                    "title": "投票记录",
+                    "icon": "fa fa-list-alt",
+                    "path": "/admin/cmspro/polling/records",
+                    "code": "admin_cmspro_polling_records",
+                    "order": 2
+                }
+            ]
+        }
+    ],
+    "user_menus": [
+        {
+            "title": "我的投票",
+            "icon": "fa fa-check-square-o",
+            "path": "/user/cmspro/polling",
+            "code": "user_cmspro_polling",
+            "order": 53
+        }
+    ],
+    "home_menus": [
+        {
+            "code": "home_cmspro_polling",
+            "title": "投票",
+            "path": "/cmspro/polling",
+            "order": 40
+        }
+    ],
+    "config_groups": [
+        {
+            "name": "polling_settings",
+            "title": "投票设置",
+            "items": [
+                {
+                    "name": "default_votes_per_user",
+                    "title": "默认每人限投次数",
+                    "type": "number",
+                    "value": "1",
+                    "tips": "新建活动时预填的每人限投次数"
+                },
+                {
+                    "name": "ip_limit",
+                    "title": "同IP投票限制",
+                    "type": "number",
+                    "value": "0",
+                    "tips": "同一IP在同一活动下最多可提交投票的次数，0为不限制"
+                },
+                {
+                    "name": "allow_user_create",
+                    "title": "允许用户端发起投票",
+                    "type": "switch",
+                    "value": "1",
+                    "tips": "开启后用户可在用户中心发起投票；关闭后仅后台管理员可创建"
+                }
+            ]
+        }
+    ],
+    "permissions": [
+        {
+            "code": "cmspro.polling.manage",
+            "name": "投票管理"
+        },
+        {
+            "code": "cmspro.polling.activity.manage",
+            "name": "活动管理"
+        },
+        {
+            "code": "cmspro.polling.record.view",
+            "name": "查看投票记录"
+        },
+        {
+            "code": "cmspro.polling.stats.export",
+            "name": "导出统计报告"
+        }
+    ],
+    "runtime_files": []
+}
