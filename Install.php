@@ -53,10 +53,11 @@ class Install
         $configGroups = $manifest['config_groups'] ?? [];
 
         $manifestCodes = [];
+        $prefix = $this->configCodePrefix();
 
         foreach ($configGroups as $groupDef) {
             $group = \App\Models\ConfigGroup::updateOrCreate(
-                ['code' => 'app_' . $this->appId . '_' . $groupDef['name']],
+                ['code' => $prefix . $groupDef['name']],
                 [
                     'name' => $groupDef['title'],
                     'app_id' => $this->appId,
@@ -66,7 +67,7 @@ class Install
             );
 
             foreach ($groupDef['items'] as $index => $item) {
-                $fullCode = 'app_' . $this->appId . '_' . $item['name'];
+                $fullCode = $prefix . $item['name'];
                 $manifestCodes[] = $fullCode;
 
                 $existing = \App\Models\ConfigItem::where('code', $fullCode)->first();
@@ -97,8 +98,10 @@ class Install
             }
         }
 
-        // 清理 manifest 中已删除的配置项（防残留）
-        \App\Models\ConfigItem::where('code', 'like', 'app_' . $this->appId . '_%')
+        // 清理 manifest 中已删除的配置项（防残留）。
+        // like 模式中的 _ 为单字符通配符，可同时匹配历史版本错误前缀
+        // （app_cmspro.polling_xxx，点号未转下划线）写入的残留，实现自动纠偏。
+        \App\Models\ConfigItem::where('code', 'like', $prefix . '%')
             ->whereNotIn('code', $manifestCodes)
             ->delete();
 
@@ -106,6 +109,17 @@ class Install
         \App\Models\ConfigGroup::where('app_id', $this->appId)
             ->whereDoesntHave('items')
             ->delete();
+    }
+
+    /**
+     * 配置项 code 前缀
+     *
+     * 与框架 AppInstallerService 保持一致：点号转下划线，
+     * 即 cmspro.polling → app_cmspro_polling_
+     */
+    protected function configCodePrefix(): string
+    {
+        return 'app_' . str_replace('.', '_', $this->appId) . '_';
     }
 
     /**

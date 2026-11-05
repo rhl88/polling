@@ -10,7 +10,7 @@
 
 @if($activities->isEmpty())
     <div class="empty-box">
-        <div class="empty-icon">&#128499;</div>
+        <div class="empty-icon"><i class="fa fa-inbox" aria-hidden="true"></i></div>
         <p>暂时没有进行中的投票活动</p>
     </div>
 @else
@@ -71,7 +71,7 @@
         border-radius: 12px;
         padding: 18px;
         color: var(--poll-text);
-        transition: all .2s;
+        transition: transform .2s, box-shadow .2s, border-color .2s;
         display: block;
     }
     .activity-item:hover {
@@ -96,7 +96,11 @@
         padding: 60px 0;
         color: var(--poll-text-light);
     }
-    .empty-icon { font-size: 40px; margin-bottom: 10px; }
+    .empty-icon {
+        font-size: 48px;
+        color: #999;
+        margin-bottom: 10px;
+    }
     .pagination { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 26px; }
     .page-btn {
         padding: 7px 18px;
@@ -105,7 +109,7 @@
         background: var(--poll-card);
         color: var(--poll-text);
         font-size: 13px;
-        transition: all .2s;
+        transition: border-color .2s, color .2s;
     }
     .page-btn:hover:not(.disabled) { border-color: var(--poll-primary); color: var(--poll-primary); }
     .page-btn.disabled { opacity: .45; pointer-events: none; }

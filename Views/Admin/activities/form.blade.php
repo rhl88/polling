@@ -78,6 +78,10 @@
             line-height: 20px;
             margin-left: 10px;
         }
+        /* 表单标签禁止折行，避免窄屏下「每人限投次数」等长标签换行错位 */
+        .layui-form-label {
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -237,13 +241,13 @@
                 '<div class="option-row" data-option-index="' + optionIndex + '">' +
                     '<span class="option-index">' + optionIndex + '</span> ' +
                     '<div class="layui-inline" style="width:260px;">' +
-                        '<input type="text" name="option_title_' + optionIndex + '" value="' + (option.title || '') + '" maxlength="200" placeholder="选项标题（必填）" class="layui-input">' +
+                        '<input type="text" name="option_title_' + optionIndex + '" maxlength="200" placeholder="选项标题（必填）" class="layui-input">' +
                     '</div>' +
                     '<div class="layui-inline" style="width:240px;">' +
-                        '<input type="text" name="option_desc_' + optionIndex + '" value="' + (option.description || '') + '" maxlength="500" placeholder="选项描述（选填）" class="layui-input">' +
+                        '<input type="text" name="option_desc_' + optionIndex + '" maxlength="500" placeholder="选项描述（选填）" class="layui-input">' +
                     '</div>' +
                     '<div class="layui-inline" style="width:220px;">' +
-                        '<input type="text" name="option_image_' + optionIndex + '" value="' + (option.image || '') + '" maxlength="255" placeholder="选项图片URL（选填）" class="layui-input">' +
+                        '<input type="text" name="option_image_' + optionIndex + '" maxlength="255" placeholder="选项图片URL（选填）" class="layui-input">' +
                     '</div>' +
                     '<div class="layui-inline">' +
                         '<button type="button" class="layui-btn layui-btn-xs" data-action="up"><i class="layui-icon layui-icon-up"></i></button>' +
@@ -252,6 +256,16 @@
                     '</div>' +
                 '</div>'
             );
+
+            // XSS 防护：回显值统一通过 .val() 赋值，杜绝属性注入
+            row.find('input[name^="option_title_"]').val(option.title || '');
+            row.find('input[name^="option_desc_"]').val(option.description || '');
+            row.find('input[name^="option_image_"]').val(option.image || '');
+
+            // 记录选项 ID：更新时保持 option_id 稳定，已投票选项不被误删
+            if (option.id) {
+                row.data('option-id', option.id);
+            }
 
             row.on('click', 'button[data-action]', function() {
                 var action = $(this).data('action');
@@ -295,7 +309,9 @@
                 if (title === '') {
                     return;
                 }
+                var optionId = parseInt(row.data('option-id'), 10);
                 options.push({
+                    id: optionId > 0 ? optionId : undefined,
                     title: title,
                     description: $.trim(row.find('input[name^="option_desc_"]').val() || ''),
                     image: $.trim(row.find('input[name^="option_image_"]').val() || ''),
@@ -372,7 +388,13 @@
         }
 
         // ---------- 提交 ----------
+        var submitting = false;
+
         form.on('submit(save)', function(data) {
+            if (submitting) {
+                return false;
+            }
+
             var field = data.field;
 
             var options = collectOptions();
@@ -403,6 +425,9 @@
                 : '/admin/cmspro/polling/api/activities';
             var method = isEdit ? 'PUT' : 'POST';
 
+            submitting = true;
+            var $submitBtn = $('button[lay-submit]').prop('disabled', true);
+
             $.ajax({
                 url: url,
                 method: method,
@@ -412,15 +437,27 @@
                     if (r.code === 0) {
                         layer.msg(r.message || '保存成功', { icon: 1 });
                         setTimeout(function() {
-                            parent.layui.table.reload('activity-table');
-                            parent.layer.closeAll();
+                            // 刷新父页面列表前先确认其存在，避免从非列表入口打开时报错
+                            if (parent.layui && parent.layui.jquery && parent.layui.jquery('#activity-table').length) {
+                                parent.layui.table.reload('activity-table');
+                            }
+                            // 精确关闭当前 iframe 所在的弹层，不影响父页面其他弹层
+                            var frameIndex = parent.layer.getFrameIndex(window.name);
+                            if (frameIndex) {
+                                parent.layer.close(frameIndex);
+                            }
                         }, 800);
                     } else {
                         layer.msg(r.message || '保存失败', { icon: 2 });
+                        submitting = false;
+                        $submitBtn.prop('disabled', false);
                     }
                 },
-                error: function() {
-                    layer.msg('请求失败', { icon: 2 });
+                error: function(xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) || '请求失败，请稍后重试';
+                    layer.msg(msg, { icon: 2 });
+                    submitting = false;
+                    $submitBtn.prop('disabled', false);
                 }
             });
             return false;

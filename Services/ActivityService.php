@@ -6,11 +6,37 @@ use App\Apps\CmsproPolling\Models\PollingActivity;
 use App\Apps\CmsproPolling\Models\PollingOption;
 use App\Apps\CmsproPolling\Models\PollingRecord;
 use App\Http\Responses\ApiResponse;
+use App\Models\ConfigItem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ActivityService
 {
+    /**
+     * 读取数据库配置项（manifest「投票设置」配置组）
+     *
+     * code 前缀与框架安装器一致（点号转下划线）：app_cmspro_polling_{name}。
+     * 数据库不可用或配置未写入时回退传入的默认值。
+     */
+    public static function getConfig(string $name, mixed $default = null): mixed
+    {
+        try {
+            $value = ConfigItem::where('code', 'app_cmspro_polling_' . $name)->value('value');
+
+            return $value ?? $default;
+        } catch (\Throwable $e) {
+            return $default;
+        }
+    }
+
+    /**
+     * 分页每页条数上限约束（防超大 per_page 拖垮查询）
+     */
+    protected function clampPerPage(?string $perPage, int $default = 20): int
+    {
+        return max(1, min(100, (int) ($perPage ?? $default)));
+    }
+
     /**
      * 投票类型选项
      */
@@ -56,7 +82,7 @@ class ActivityService
             $query->whereDate('create_time', '<=', $params['end_date']);
         }
 
-        $perPage = (int) ($params['per_page'] ?? 20);
+        $perPage = $this->clampPerPage($params['per_page'] ?? null);
         $items = $query->withCount('records')
             ->orderBy('sort')
             ->orderByDesc('id')
@@ -85,7 +111,7 @@ class ActivityService
             $query->where('status', (int) $params['status']);
         }
 
-        $perPage = (int) ($params['per_page'] ?? 20);
+        $perPage = $this->clampPerPage($params['per_page'] ?? null);
         $items = $query->withCount('records')
             ->orderByDesc('id')
             ->paginate($perPage);
@@ -190,8 +216,11 @@ class ActivityService
             return ApiResponse::error(40001, '该活动已有投票记录，不允许更换投票类型');
         }
 
+        $hasRecords = $activity->records()->exists();
+        $forcedKept = 0;
+
         try {
-            DB::transaction(function () use ($activity, $data) {
+            DB::transaction(function () use ($activity, $data, $hasRecords, &$forcedKept) {
                 $activity->update([
                     'title' => $data['title'],
                     'description' => $data['description'] ?? '',
@@ -209,7 +238,8 @@ class ActivityService
                 ]);
 
                 if (array_key_exists('options', $data)) {
-                    $this->saveOptions($activity, $data['options']);
+                    // 已有投票记录时保护已投票选项不被删除（保持 option_id 稳定）
+                    $forcedKept = $this->saveOptions($activity, $data['options'], $hasRecords);
                 }
             });
         } catch (\Throwable $e) {
@@ -217,7 +247,11 @@ class ActivityService
             return ApiResponse::error(50001, '更新失败：' . $e->getMessage());
         }
 
-        return ApiResponse::success($this->formatActivity($activity->refresh()->load('options'), true), '更新成功');
+        $message = $forcedKept > 0
+            ? sprintf('更新成功（%d 个已投票选项不可删除，已自动保留）', $forcedKept)
+            : '更新成功';
+
+        return ApiResponse::success($this->formatActivity($activity->refresh()->load('options'), true), $message);
     }
 
     /**
@@ -276,7 +310,7 @@ class ActivityService
      */
     public function getRecordList(array $params): array
     {
-        $query = PollingRecord::query()->with(['option', 'user']);
+        $query = PollingRecord::query()->with(['activity', 'option', 'user']);
 
         if (!empty($params['activity_id'])) {
             $query->where('activity_id', (int) $params['activity_id']);
@@ -301,7 +335,7 @@ class ActivityService
             $query->whereDate('create_time', '<=', $params['end_date']);
         }
 
-        $perPage = (int) ($params['per_page'] ?? 20);
+        $perPage = $this->clampPerPage($params['per_page'] ?? null);
         $items = $query->orderByDesc('id')->paginate($perPage);
 
         $items->through(function (PollingRecord $record) {
@@ -408,25 +442,60 @@ class ActivityService
     }
 
     /**
-     * 保存活动选项（整体替换策略）
+     * 保存活动选项（按 ID 增量更新策略）
+     *
+     * - 提交数据携带有效 id 的选项执行更新，保持 option_id 稳定（历史投票记录不失效）；
+     * - 未携带 id 的选项新建；
+     * - 未出现在提交数据中的旧选项删除；
+     * - $protectVoted 为 true 时（更新已有投票记录的活动），已投票选项即使用户
+     *   未提交也强制保留，避免投票记录悬空。
+     *
+     * @return int 被强制保留的已投票选项数量
      */
-    protected function saveOptions(PollingActivity $activity, array $options): void
+    protected function saveOptions(PollingActivity $activity, array $options, bool $protectVoted = false): int
     {
         $validOptions = array_values(array_filter($options, function ($option) {
             return trim((string) ($option['title'] ?? '')) !== '';
         }));
 
-        PollingOption::where('activity_id', $activity->id)->delete();
+        $votedIds = $protectVoted
+            ? PollingRecord::where('activity_id', $activity->id)->distinct()->pluck('option_id')->all()
+            : [];
+
+        $keepIds = [];
 
         foreach ($validOptions as $index => $option) {
-            PollingOption::create([
-                'activity_id' => $activity->id,
+            $attributes = [
                 'title' => trim((string) $option['title']),
                 'description' => trim((string) ($option['description'] ?? '')),
                 'image' => trim((string) ($option['image'] ?? '')),
                 'sort' => (int) ($option['sort'] ?? $index + 1),
-            ]);
+            ];
+
+            $existing = !empty($option['id'])
+                ? PollingOption::where('activity_id', $activity->id)->find((int) $option['id'])
+                : null;
+
+            if ($existing) {
+                $existing->update($attributes);
+                $keepIds[] = $existing->id;
+            } else {
+                $created = PollingOption::create(array_merge(
+                    $attributes,
+                    ['activity_id' => $activity->id]
+                ));
+                $keepIds[] = $created->id;
+            }
         }
+
+        // 已投票但未包含在提交数据中的选项强制保留
+        $forcedKeepIds = array_values(array_diff($votedIds, $keepIds));
+
+        PollingOption::where('activity_id', $activity->id)
+            ->whereNotIn('id', array_merge($keepIds, $forcedKeepIds))
+            ->delete();
+
+        return count($forcedKeepIds);
     }
 
     /**

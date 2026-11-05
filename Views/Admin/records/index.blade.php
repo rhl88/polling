@@ -71,6 +71,8 @@
         table.render({
             elem: '#record-table',
             url: '/admin/cmspro/polling/api/records',
+            // Layui 默认发 limit，后端读 per_page，需显式对齐参数名（常见问题第十三章）
+            request: { pageName: 'page', limitName: 'per_page' },
             page: {
                 layout: ['count', 'prev', 'page', 'next', 'limit'],
                 groups: 5,

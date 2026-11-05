@@ -1,0 +1,10 @@
+# 运行产物与敏感文件
+.env
+*.exe
+*.bak
+*.tmp
+*.log
+venv/
+.idea/
+.vscode/
+node_modules/

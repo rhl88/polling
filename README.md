@@ -8,6 +8,7 @@
 | 应用名称 | 投票系统 |
 | 应用版本 | 1.0.0 |
 | 文档版本 | 1.0.0 |
+| 官方地址 | https://www.cmspro.cn/apps/cmspro.polling |
 | 依赖 | PHP >= 8.3，CmsPro >= 5.0.0（无其他应用依赖） |
 
 ## 应用概述
@@ -31,7 +32,7 @@ CmsproPolling/
 ├── Models/             # 模型（PollingActivity、PollingOption、PollingRecord）
 ├── Routes/             # 路由（admin、admin_api、user、user_api、home、home_api）
 ├── Services/           # 业务服务（ActivityService、VoteService）
-├── Tests/              # 应用级测试（58 用例 / 189 断言）
+├── Tests/              # 应用级测试（66 用例 / 211 断言）
 ├── Views/
 │   ├── Admin/          # 后台视图（活动列表/表单/统计、记录）
 │   ├── Home/           # 前台视图（列表、详情、结果片段）

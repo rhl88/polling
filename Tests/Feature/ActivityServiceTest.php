@@ -162,10 +162,65 @@ class ActivityServiceTest extends PollingTestCase
         $this->assertSame(0, $result['code']);
         $this->assertSame('更新后的标题', $result['data']['title']);
 
-        // 旧选项被整体替换清理
+        // 提交数据未携带 id 时视为全新选项，旧选项被清理
         $this->assertDatabaseMissing('app_cmspro_polling_options', ['id' => $oldOptionId]);
         $this->assertSame(2, PollingOption::where('activity_id', $activityId)->count());
         $this->assertDatabaseHas('app_cmspro_polling_options', ['activity_id' => $activityId, 'title' => '全新选项甲']);
+    }
+
+    public function test_更新携带ID的选项原地更新保持选项ID稳定(): void
+    {
+        $created = $this->service->store($this->activityData(), 0);
+        $activityId = $created['data']['id'];
+        $optionId = $created['data']['options'][0]['id'];
+
+        $result = $this->service->update($activityId, $this->activityData([
+            'options' => [
+                ['id' => $optionId, 'title' => '原地改名选项', 'description' => '', 'image' => '', 'sort' => 1],
+                ['title' => '新增选项', 'description' => '', 'image' => '', 'sort' => 2],
+            ],
+        ]));
+
+        $this->assertSame(0, $result['code']);
+
+        // 携带 id 的选项执行原地更新而非删除重建，历史投票记录不悬空
+        $this->assertDatabaseHas('app_cmspro_polling_options', [
+            'id' => $optionId,
+            'title' => '原地改名选项',
+        ]);
+        $this->assertSame(2, PollingOption::where('activity_id', $activityId)->count());
+    }
+
+    public function test_已有投票记录的活动删除已投票选项被强制保留(): void
+    {
+        $created = $this->service->store($this->activityData(), 0);
+        $activityId = $created['data']['id'];
+        $votedOptionId = $created['data']['options'][0]['id'];
+
+        // 模拟已对第一个选项投票
+        PollingRecord::create([
+            'activity_id' => $activityId,
+            'option_id' => $votedOptionId,
+            'user_id' => 0,
+            'vote_no' => 1,
+            'rank' => 0,
+            'ip' => '1.1.1.1',
+        ]);
+
+        // 提交数据不包含已投票选项，试图将其删除
+        $result = $this->service->update($activityId, $this->activityData([
+            'options' => [
+                ['title' => '未投票选项', 'description' => '', 'image' => '', 'sort' => 1],
+                ['title' => '新增选项', 'description' => '', 'image' => '', 'sort' => 2],
+            ],
+        ]));
+
+        $this->assertSame(0, $result['code']);
+        $this->assertStringContainsString('已自动保留', $result['message']);
+
+        // 已投票选项被强制保留，投票记录不悬空
+        $this->assertDatabaseHas('app_cmspro_polling_options', ['id' => $votedOptionId]);
+        $this->assertSame(3, PollingOption::where('activity_id', $activityId)->count());
     }
 
     public function test_已有投票记录的活动禁止更换投票类型(): void
@@ -359,5 +414,44 @@ class ActivityServiceTest extends PollingTestCase
         $this->assertSame(PollingActivity::STATUS_ENDED, $formatted['effective_status']);
         $this->assertSame('已结束', $formatted['effective_status_text']);
         $this->assertFalse($formatted['is_votable']);
+    }
+
+    public function test_列表每页条数被钳制在安全范围(): void
+    {
+        $this->service->store($this->activityData(), 0);
+
+        // 超大 per_page 被钳制为上限 100，防止恶意大分页拖垮查询
+        $oversized = $this->service->getList(['per_page' => 99999]);
+        $this->assertSame(0, $oversized['code']);
+        $this->assertSame(100, $oversized['data']['pagination']['per_page']);
+
+        // 非法（负数）per_page 下限钳制为 1
+        $negative = $this->service->getList(['per_page' => -5]);
+        $this->assertSame(1, $negative['data']['pagination']['per_page']);
+
+        // 正常值原样透传
+        $normal = $this->service->getList(['per_page' => 50]);
+        $this->assertSame(50, $normal['data']['pagination']['per_page']);
+    }
+
+    public function test_数据库配置项读取未配置时回退默认值(): void
+    {
+        // 配置项未写入数据库时回退传入默认值
+        $this->assertSame('1', ActivityService::getConfig('allow_user_create', '1'));
+        $this->assertSame(0, ActivityService::getConfig('not_exists_config', 0));
+
+        // 写入配置项后读取数据库值（后台「投票设置」可动态修改）
+        \App\Models\ConfigItem::create([
+            'group_id' => 0,
+            'name' => '允许用户端发起投票',
+            'code' => 'app_cmspro_polling_allow_user_create',
+            'value' => '0',
+            'type' => 'switch',
+            'tips' => '',
+            'sort' => 0,
+            'status' => 1,
+        ]);
+
+        $this->assertSame('0', ActivityService::getConfig('allow_user_create', '1'));
     }
 }

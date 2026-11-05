@@ -22,8 +22,9 @@
                             ? round((($option['score'] ?? 0) / max(1, collect($stats['options'])->max('score'))) * 100, 1)
                             : 0)
                         : ($option['percent'] ?? 0);
+                    $ratio = min(1, max(0, $width / 100));
                 @endphp
-                <div class="bar-fill {{ ($stats['type'] ?? '') === 'ranking' ? 'rank' : '' }}" style="width: {{ min(100, $width) }}%"></div>
+                <div class="bar-fill {{ ($stats['type'] ?? '') === 'ranking' ? 'rank' : '' }}" style="transform: scaleX({{ $ratio }})"></div>
             </div>
         </div>
     @endforeach

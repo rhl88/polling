@@ -49,14 +49,14 @@
             overflow: hidden;
         }
         .bar-fill {
-            background: linear-gradient(90deg, #1e9fff, #5fb878);
+            background: linear-gradient(90deg, #1e9fff, #16baaa);
             height: 100%;
             border-radius: 10px;
             min-width: 2px;
             transition: width .5s;
         }
         .bar-fill.rank {
-            background: linear-gradient(90deg, #a06bff, #ffb800);
+            background: linear-gradient(90deg, #2f4056, #ffb800);
         }
     </style>
 </head>
@@ -126,27 +126,35 @@
                     '<div class="stat-card"><div class="num">' + stats.options.length + '</div><div class="label">选项数</div></div>'
                 );
 
-                // 选项条形图
-                var html = '';
+                // 选项条形图（XSS 防护：option.title 等服务端数据统一 .text() 赋值）
+                var $stats = $('#option-stats').empty();
                 $.each(stats.options, function(i, option) {
-                    var left, right, width;
+                    var $row = $('<div>').addClass('bar-row');
+                    var $title = $('<div>').addClass('bar-title');
+
+                    var $left = $('<span>');
+                    var $right = $('<span>');
+                    var width;
+
                     if (isRanking) {
-                        left = option.title + '（综合得分 ' + option.score + '）';
-                        right = (option.rank_distribution && Object.keys(option.rank_distribution).length)
+                        $left.text(option.title + '（综合得分 ' + option.score + '）');
+                        $right.text((option.rank_distribution && Object.keys(option.rank_distribution).length)
                             ? Object.keys(option.rank_distribution).map(function(rank) { return '第' + rank + '名 ' + option.rank_distribution[rank] + '次'; }).join('、')
-                            : '暂无排名';
+                            : '暂无排名');
                         width = (option.score / maxScore) * 100;
                     } else {
-                        left = option.title + '（' + option.count + '票）';
-                        right = option.percent + '%';
+                        $left.text(option.title + '（' + option.count + '票）');
+                        $right.text(option.percent + '%');
                         width = option.percent;
                     }
-                    html += '<div class="bar-row">' +
-                        '<div class="bar-title"><span>' + left + '</span><span>' + right + '</span></div>' +
-                        '<div class="bar-track"><div class="bar-fill' + (isRanking ? ' rank' : '') + '" style="width:' + Math.min(100, width) + '%"></div></div>' +
-                    '</div>';
+
+                    $title.append($left, $right);
+
+                    var $fill = $('<div>').addClass('bar-fill' + (isRanking ? ' rank' : ''))
+                        .css('width', Math.min(100, width) + '%');
+
+                    $row.append($title, $('<div>').addClass('bar-track').append($fill)).appendTo($stats);
                 });
-                $('#option-stats').html(html);
             });
         }
 
@@ -167,6 +175,8 @@
         table.render({
             elem: '#record-table',
             url: '/admin/cmspro/polling/api/records?activity_id=' + activityId,
+            // Layui 默认发 limit，后端读 per_page，需显式对齐参数名（常见问题第十三章）
+            request: { pageName: 'page', limitName: 'per_page' },
             page: {
                 layout: ['count', 'prev', 'page', 'next', 'limit'],
                 groups: 5,

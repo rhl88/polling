@@ -52,8 +52,8 @@ class ActivityController extends Controller
      */
     public function store(Request $request)
     {
-        // 全局配置：是否允许用户端发起投票
-        $allowUserCreate = (bool) config('apps.cmspro.polling.allow_user_create', true);
+        // 全局配置：是否允许用户端发起投票（后台「投票设置」配置项，数据库直读）
+        $allowUserCreate = (string) ActivityService::getConfig('allow_user_create', '1') === '1';
         if (!$allowUserCreate) {
             return response()->json(ApiResponse::error(40301, '管理员已关闭用户端发起投票功能'));
         }
@@ -139,6 +139,7 @@ class ActivityController extends Controller
             'result_visibility' => 'nullable|string|in:always,after_vote,end,never',
             'sort' => 'nullable|integer|min:0',
             'options' => 'required|array|min:2',
+            'options.*.id' => 'nullable|integer|min:1',
             'options.*.title' => 'required|string|max:200',
             'options.*.description' => 'nullable|string|max:500',
             'options.*.sort' => 'nullable|integer|min:0',

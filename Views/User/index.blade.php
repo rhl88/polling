@@ -23,7 +23,7 @@
             color: #666;
             background: #f2f2f2;
             text-decoration: none;
-            transition: all .2s;
+            transition: color .2s, background-color .2s;
         }
         .nav-tabs a.active, .nav-tabs a:hover { color: #fff; background: #1e9fff; }
         .activity-card {

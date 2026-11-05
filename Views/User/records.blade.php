@@ -22,7 +22,7 @@
             color: #666;
             background: #f2f2f2;
             text-decoration: none;
-            transition: all .2s;
+            transition: color .2s, background-color .2s;
         }
         .nav-tabs a.active, .nav-tabs a:hover { color: #fff; background: #1e9fff; }
         .record-card {
@@ -71,24 +71,33 @@
                 }
 
                 var items = r.data.items || [];
-                var html = '';
+                var $list = $('#record-list').empty();
 
                 if (items.length === 0) {
-                    html = '<div class="empty-tip">暂无参与记录，去 <a href="/cmspro/polling" style="color:#1e9fff;">投票广场</a> 看看吧～</div>';
+                    $('<div>')
+                        .addClass('empty-tip')
+                        .html('暂无参与记录，去 <a href="/cmspro/polling" style="color:#1e9fff;">投票广场</a> 看看吧～')
+                        .appendTo($list);
                 } else {
+                    // XSS 防护：服务端数据统一 .text() 赋值，不做字符串拼接
                     $.each(items, function(i, d) {
-                        html += '<div class="record-card" data-id="' + d.activity_id + '">' +
-                            '<div class="title">' + d.activity_title + '</div>' +
-                            '<div class="meta">' +
-                                '<span>投给：<b style="color:#333;">' + d.option_title + '</b></span>' +
-                                (d.rank > 0 ? '<span>名次：第 ' + d.rank + ' 名</span>' : '') +
-                                '<span>时间：' + d.create_time + '</span>' +
-                            '</div>' +
-                        '</div>';
+                        var $card = $('<div>').addClass('record-card').data('id', d.activity_id);
+
+                        $('<div>').addClass('title').text(d.activity_title || '').appendTo($card);
+
+                        var $meta = $('<div>').addClass('meta');
+                        var $voteTo = $('<span>').text('投给：');
+                        $('<b>').css('color', '#333').text(d.option_title || '').appendTo($voteTo);
+                        $voteTo.appendTo($meta);
+
+                        if (d.rank > 0) {
+                            $('<span>').text('名次：第 ' + d.rank + ' 名').appendTo($meta);
+                        }
+                        $('<span>').text('时间：' + d.create_time).appendTo($meta);
+
+                        $card.append($meta).appendTo($list);
                     });
                 }
-
-                $('#record-list').html(html);
 
                 var pagination = r.data.pagination;
                 if (pagination && pagination.total > pagination.per_page) {

@@ -43,7 +43,7 @@
 
     <div id="option-area">
         @foreach($activity->options as $option)
-            <div class="option-item" data-id="{{ $option->id }}">
+            <div class="option-item" data-id="{{ $option->id }}" role="button" tabindex="0" aria-pressed="false">
                 @if($activity->type === 'ranking')
                     <span class="rank-badge" data-badge></span>
                 @endif
@@ -53,7 +53,7 @@
                         <div class="option-desc">{{ $option->description }}</div>
                     @endif
                 </div>
-                <span class="check-mark" data-check>&#10003;</span>
+                <span class="check-mark" data-check aria-hidden="true"></span>
             </div>
         @endforeach
     </div>
@@ -122,9 +122,13 @@
         padding: 14px 16px;
         margin-bottom: 10px;
         cursor: pointer;
-        transition: all .15s;
+        transition: border-color .15s, background-color .15s;
         position: relative;
         background: #fff;
+    }
+    .option-item:focus-visible {
+        outline: 2px solid var(--poll-primary);
+        outline-offset: 2px;
     }
     .option-item:hover { border-color: #b9c4fa; }
     .option-item.selected {
@@ -157,18 +161,26 @@
         height: 22px;
         border-radius: 50%;
         border: 2px solid #d5d8e0;
-        color: transparent;
-        font-size: 13px;
         display: inline-flex;
-        align-items: center;
-        justify-content: center;
         flex-shrink: 0;
-        transition: all .15s;
+        position: relative;
+        transition: background-color .15s, border-color .15s;
     }
+    /* 选中打勾：纯 CSS 绘制，避免 Unicode 符号跨平台渲染不一致 */
     .option-item.selected .check-mark {
         background: var(--poll-primary);
         border-color: var(--poll-primary);
-        color: #fff;
+    }
+    .option-item.selected .check-mark::after {
+        content: '';
+        position: absolute;
+        left: 7px;
+        top: 3px;
+        width: 5px;
+        height: 10px;
+        border: solid #fff;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
     }
     .vote-actions { margin-top: 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
     .btn-primary {
@@ -180,12 +192,30 @@
         font-size: 15px;
         font-weight: 600;
         cursor: pointer;
-        transition: all .2s;
+        transition: background-color .2s, transform .2s;
     }
     .btn-primary:hover:not(:disabled) { background: var(--poll-primary-dark); transform: translateY(-1px); }
     .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
     .vote-hint { font-size: 13px; color: var(--poll-text-light); }
     .result-hidden-tip { text-align: center; color: var(--poll-text-light); font-size: 13px; padding: 6px 0 20px; }
+    /* 轻量 Toast（替代 alert，见交互规范） */
+    .poll-toast {
+        position: fixed;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-10px);
+        background: #333;
+        color: #fff;
+        padding: 10px 22px;
+        border-radius: 20px;
+        font-size: 14px;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 999;
+        transition: opacity .25s, transform .25s;
+    }
+    .poll-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .poll-toast.toast-error { background: #e8590c; }
     /* 结果区条形图 */
     .result-row { margin-bottom: 16px; }
     .result-row .row-head {
@@ -201,12 +231,16 @@
     .bar-track { background: #eef0f5; border-radius: 9px; height: 16px; overflow: hidden; }
     .bar-fill {
         height: 100%;
+        width: 100%;
         border-radius: 9px;
         background: linear-gradient(90deg, var(--poll-primary), #748ffc);
-        min-width: 3px;
-        transition: width .6s ease;
+        transform-origin: left center;
+        animation: bar-grow .6s ease both;
     }
     .bar-fill.rank { background: linear-gradient(90deg, #9c36b5, #d0bfff); }
+    @keyframes bar-grow {
+        from { transform: scaleX(0); }
+    }
 </style>
 @endpush
 
@@ -230,6 +264,25 @@
         var voteHint = document.getElementById('vote-hint');
         var optionItems = optionArea.querySelectorAll('.option-item');
 
+        // 轻量 Toast（替代 alert，避免阻塞式弹窗打断操作流）
+        function showToast(message, type) {
+            var existing = document.querySelector('.poll-toast');
+            if (existing) {
+                existing.remove();
+            }
+            var toast = document.createElement('div');
+            toast.className = 'poll-toast' + (type === 'error' ? ' toast-error' : '');
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            requestAnimationFrame(function() {
+                toast.classList.add('show');
+            });
+            setTimeout(function() {
+                toast.classList.remove('show');
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 2400);
+        }
+
         function optionIsVotingBlocked() {
             return !isVotable;
         }
@@ -240,6 +293,7 @@
                 var index = selected.indexOf(id);
 
                 item.classList.toggle('selected', index !== -1);
+                item.setAttribute('aria-pressed', index !== -1 ? 'true' : 'false');
 
                 // 排序徽章
                 var badge = item.querySelector('[data-badge]');
@@ -260,7 +314,7 @@
             if (optionIsVotingBlocked()) {
                 voteHint.textContent = isVotable ? '' : '当前不在投票时间内';
             } else if (requireLogin && isGuest) {
-                voteHint.innerHTML = '该投票需要 <a href="/user/cmspro/polling">登录</a> 后参与';
+                voteHint.innerHTML = '该投票需要 <a href="/user/login">登录</a> 后参与';
             } else if (activityType === 'multiple') {
                 voteHint.textContent = '已选 ' + selected.length + ' / ' + maxChoices + ' 项';
             } else if (activityType === 'ranking') {
@@ -270,39 +324,53 @@
             }
         }
 
+        function toggleOption(item) {
+            if (optionIsVotingBlocked()) {
+                return;
+            }
+            if (requireLogin && isGuest) {
+                voteHint.innerHTML = '该投票需要 <a href="/user/login">登录</a> 后参与';
+                return;
+            }
+
+            var id = item.getAttribute('data-id');
+            var index = selected.indexOf(id);
+
+            if (index !== -1) {
+                // 取消选择
+                selected.splice(index, 1);
+            } else {
+                // 多选超限拦截
+                if (activityType === 'multiple' && selected.length >= maxChoices) {
+                    voteHint.textContent = '最多只能选择 ' + maxChoices + ' 项';
+                    return;
+                }
+                selected.push(id);
+            }
+            refreshUI();
+        }
+
         optionItems.forEach(function(item) {
             item.addEventListener('click', function() {
-                if (optionIsVotingBlocked()) {
-                    return;
-                }
-                if (requireLogin && isGuest) {
-                    voteHint.innerHTML = '该投票需要 <a href="/user/cmspro/polling">登录</a> 后参与';
-                    return;
-                }
+                toggleOption(item);
+            });
 
-                var id = item.getAttribute('data-id');
-                var index = selected.indexOf(id);
-
-                if (index !== -1) {
-                    // 取消选择
-                    selected.splice(index, 1);
-                } else {
-                    // 多选超限拦截
-                    if (activityType === 'multiple' && selected.length >= maxChoices) {
-                        voteHint.textContent = '最多只能选择 ' + maxChoices + ' 项';
-                        return;
-                    }
-                    selected.push(id);
+            // 键盘可达性：Enter / 空格 触发选择（等价鼠标点击）
+            item.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleOption(item);
                 }
-                refreshUI();
             });
         });
 
         refreshUI();
 
         // ---------- 提交投票 ----------
+        var voting = false;
+
         btnVote.addEventListener('click', function() {
-            if (btnVote.disabled) {
+            if (btnVote.disabled || voting) {
                 return;
             }
 
@@ -310,6 +378,10 @@
                 option_ids: selected.map(function(id) { return parseInt(id, 10); }),
                 _token: document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             };
+
+            voting = true;
+            btnVote.disabled = true;
+            btnVote.textContent = '提交中…';
 
             fetch('/cmspro/polling/api/vote/' + activityId, {
                 method: 'POST',
@@ -323,15 +395,23 @@
             .then(function(response) { return response.json(); })
             .then(function(r) {
                 if (r.code === 0) {
-                    alert(r.message || '投票成功！');
+                    showToast(r.message || '投票成功！', 'success');
                     // 投票后刷新页面以更新结果
-                    location.reload();
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1000);
                 } else {
-                    alert(r.message || '投票失败');
+                    showToast(r.message || '投票失败', 'error');
+                    voting = false;
+                    btnVote.disabled = false;
+                    btnVote.textContent = '投出你的一票';
                 }
             })
             .catch(function() {
-                alert('网络异常，请稍后重试');
+                showToast('网络异常，请稍后重试', 'error');
+                voting = false;
+                btnVote.disabled = false;
+                btnVote.textContent = '投出你的一票';
             });
         });
     })();

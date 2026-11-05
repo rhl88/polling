@@ -91,12 +91,14 @@
 </script>
 @endverbatim
 
-{{-- Layui 模板：行操作按钮 --}}
+{{-- Layui 模板：行操作按钮（无活动管理权限时隐藏编辑/删除） --}}
 @verbatim
 <script type="text/html" id="rowBar">
     <a class="layui-btn layui-btn-xs" lay-event="stats">统计</a>
+    {{# if(!window.hasPermission || window.hasPermission('cmspro.polling.activity.manage')){ }}
     <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
     <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="delete">删除</a>
+    {{# } }}
 </script>
 @endverbatim
 
@@ -133,6 +135,8 @@
         table.render({
             elem: '#activity-table',
             url: '/admin/cmspro/polling/api/activities',
+            // Layui 默认发 limit，后端读 per_page，需显式对齐参数名（常见问题第十三章）
+            request: { pageName: 'page', limitName: 'per_page' },
             page: {
                 layout: ['count', 'prev', 'page', 'next', 'limit'],
                 groups: 5,
@@ -162,7 +166,14 @@
                 type: 2,
                 title: '新建投票活动',
                 area: ['90%', '90%'],
-                content: '/admin/cmspro/polling/activities/form'
+                content: '/admin/cmspro/polling/activities/form',
+                shade: 0.3,
+                shadeClose: false,
+                closeBtn: 1,
+                end: function() {
+                    // 弹层关闭后刷新列表，捕获「保存成功但消息提示未及展示」的边缘场景
+                    table.reload('activity-table');
+                }
             });
         });
 
@@ -183,9 +194,12 @@
             if (obj.event === 'stats') {
                 layer.open({
                     type: 2,
-                    title: '投票统计 - ' + data.title,
+                    title: '投票统计',
                     area: ['90%', '90%'],
-                    content: '/admin/cmspro/polling/activities/stats/' + data.id
+                    content: '/admin/cmspro/polling/activities/stats/' + data.id,
+                    shade: 0.3,
+                    shadeClose: false,
+                    closeBtn: 1
                 });
                 return;
             }
@@ -195,7 +209,14 @@
                     type: 2,
                     title: '编辑投票活动',
                     area: ['90%', '90%'],
-                    content: '/admin/cmspro/polling/activities/form/' + data.id
+                    content: '/admin/cmspro/polling/activities/form/' + data.id,
+                    shade: 0.3,
+                    shadeClose: false,
+                    closeBtn: 1,
+                    end: function() {
+                        // 编辑弹层关闭后刷新列表（含取消编辑的情况，保持数据新鲜）
+                        table.reload('activity-table');
+                    }
                 });
                 return;
             }
@@ -212,6 +233,10 @@
                             } else {
                                 layer.msg(r.message || '删除失败', { icon: 2 });
                             }
+                        },
+                        error: function(xhr) {
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message) || '删除请求失败，请稍后重试';
+                            layer.msg(msg, { icon: 2 });
                         }
                     });
                     layer.close(index);

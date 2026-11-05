@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', '投票')</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ asset('CmsProUi/font-awesome/4.7.0/css/font-awesome.min.css') }}">
     <style>
         :root {
             --poll-primary: #4f6ef7;
@@ -66,13 +67,23 @@
             font-size: 12px;
             padding: 20px 0 30px;
         }
+        /* 无障碍：系统开启「减弱动态效果」时关闭过渡与动画 */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                transition-duration: .01ms !important;
+                animation-duration: .01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
     </style>
     @stack('styles')
 </head>
 <body>
 <header class="poll-header">
     <a class="brand" href="/cmspro/polling">
-        <span class="logo">&#10003;</span>
+        <span class="logo"><i class="fa fa-check-square-o" aria-hidden="true"></i></span>
         投票
     </a>
     <div class="actions">
