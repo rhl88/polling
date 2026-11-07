@@ -339,6 +339,9 @@
             if (index !== -1) {
                 // 取消选择
                 selected.splice(index, 1);
+            } else if (activityType === 'single') {
+                // 单选：radio 语义——点击新选项直接替换已选项，保证至多一项选中
+                selected = [id];
             } else {
                 // 多选超限拦截
                 if (activityType === 'multiple' && selected.length >= maxChoices) {

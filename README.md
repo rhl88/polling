@@ -32,7 +32,7 @@ CmsproPolling/
 ├── Models/             # 模型（PollingActivity、PollingOption、PollingRecord）
 ├── Routes/             # 路由（admin、admin_api、user、user_api、home、home_api）
 ├── Services/           # 业务服务（ActivityService、VoteService）
-├── Tests/              # 应用级测试（71 用例 / 232 断言）
+├── Tests/              # 应用级测试（72 用例 / 234 断言）
 ├── Views/
 │   ├── Admin/          # 后台视图（活动列表/表单/统计、记录）
 │   ├── Home/           # 前台视图（列表、详情、结果片段）
@@ -87,3 +87,4 @@ php artisan test app/Apps/CmsproPolling/Tests
 |------|------|------|
 | 1.0.0 | 2026-11-05 | 初始版本 |
 | 1.0.0 | 2026-11-07 | 复验整改（同版本内修复）：会话过期 401 统一跳转登录页、动效时长收敛、色板对齐框架规范、统计改库端聚合、CSV 导出改流式响应、活动表补 type/create_time 索引、前台 H5 断点体系（UI 规范 10.3）与可访问性增强、文档数字同步（测试 71 用例 / 232 断言） |
+| 1.0.0 | 2026-11-07 | 修复前台单选投票可多选的问题：详情页交互增加 single 分支（radio 切换语义，点击新选项替换已选项），新增回归锚点测试，测试补齐至 72 用例 |

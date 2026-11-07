@@ -50,6 +50,28 @@ class HomePollingApiTest extends PollingTestCase
             ->assertSee('详情选项二');
     }
 
+    public function test_详情页单选投票脚本为单选切换语义(): void
+    {
+        // 回归锚点：单选投票前端曾可多选高亮——toggleOption 无 single 分支，
+        // 依次点击多个选项全部入列且显示「已选」，提交才被后端拦截。
+        // 修复采用 radio 切换语义：点击新选项替换已选项，保证至多一项选中
+        $activity = $this->makeActivity();
+        $this->makeOptions($activity, ['选项一', '选项二']);
+
+        $script = $this->get('/cmspro/polling/' . $activity->id)->getContent();
+
+        $this->assertStringContainsString(
+            "activityType === 'single'",
+            $script,
+            '单选交互脚本缺少 single 分支：点击新选项应替换已选项，防止多选'
+        );
+        $this->assertStringContainsString(
+            'selected = [id];',
+            $script,
+            'single 分支应为 radio 切换语义（selected = [id] 直接替换），而非 push 追加'
+        );
+    }
+
     public function test_前台详情页草稿活动返回404(): void
     {
         $draft = $this->makeActivity([
