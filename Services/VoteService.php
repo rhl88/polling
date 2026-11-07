@@ -288,20 +288,19 @@ class VoteService
     {
         if ($userId > 0) {
             // 已登录用户：历史游客投票的 IP 可能相同，仅按用户维度统计
+            // count(distinct) 在库内完成去重，规避 select * + group by 触发 MySQL only_full_group_by 报 1055
             return PollingRecord::where('activity_id', $activityId)
                 ->where('user_id', $userId)
-                ->groupBy('vote_no')
-                ->get()
-                ->count();
+                ->distinct()
+                ->count('vote_no');
         }
 
         // 游客按 IP 维度统计
         return PollingRecord::where('activity_id', $activityId)
             ->where('user_id', 0)
             ->where('ip', $ip)
-            ->groupBy('vote_no')
-            ->get()
-            ->count();
+            ->distinct()
+            ->count('vote_no');
     }
 
     /**
@@ -309,8 +308,12 @@ class VoteService
      */
     protected function getIpBatchCount(int $activityId, string $ip): int
     {
+        // 按 (user_id, vote_no) 元组去重；SELECT 限定为分组列以满足 MySQL only_full_group_by 模式。
+        // 不用 count(distinct user_id, vote_no)：MySQL 支持多参数形式，但 SQLite 会报
+        // "DISTINCT aggregates must have exactly one argument"，为兼容测试库放弃该写法
         return PollingRecord::where('activity_id', $activityId)
             ->where('ip', $ip)
+            ->select(['user_id', 'vote_no'])
             ->groupBy(['user_id', 'vote_no'])
             ->get()
             ->count();

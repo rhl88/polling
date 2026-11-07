@@ -7,6 +7,7 @@ use App\Apps\CmsproPolling\Models\PollingRecord;
 use App\Apps\CmsproPolling\Services\VoteService;
 use App\Apps\CmsproPolling\Tests\PollingTestCase;
 use App\Services\HookManager;
+use Illuminate\Support\Facades\DB;
 
 /**
  * 投票核心服务测试。
@@ -298,6 +299,52 @@ class VoteServiceTest extends PollingTestCase
         $guest = $this->service->submitVote($activity, [$optionA], [], null, '6.6.6.6');
         $this->assertSame(40001, $guest['code']);
         $this->assertSame('该IP的投票次数已达上限', $guest['message']);
+    }
+
+    public function test_同IP批次数按用户与批次元组去重(): void
+    {
+        // 同一 IP 下各来源的 vote_no 均从 1 独立递增（批次号按来源计数），
+        // getIpBatchCount 必须按 (user_id, vote_no) 元组去重，仅按 vote_no 单列去重会漏数批次
+        $activity = $this->makeActivity(['votes_per_user' => 10, 'ip_limit' => 2]);
+        [$optionA] = $this->makeOptions($activity);
+        $userA = $this->createUser();
+        $userB = $this->createUser();
+
+        // 用户 A 与游客各投一批，两者 vote_no 均为 1：元组去重后该 IP 已达 2 批上限
+        $this->assertSame(0, $this->service->submitVote($activity, [$optionA], [], $userA, '8.8.8.8')['code']);
+        $this->assertSame(0, $this->service->submitVote($activity, [$optionA], [], null, '8.8.8.8')['code']);
+
+        // 第三个来源（用户 B）被 IP 批次上限拦截
+        $third = $this->service->submitVote($activity, [$optionA], [], $userB, '8.8.8.8');
+        $this->assertSame(40001, $third['code']);
+        $this->assertSame('该IP的投票次数已达上限', $third['message']);
+    }
+
+    public function test_批次计数查询兼容only_full_group_by模式(): void
+    {
+        // MySQL 5.7+ 默认 sql_mode=only_full_group_by：SELECT * 搭配 GROUP BY 会报 1055
+        // （SELECT 列表含非聚合列且不在 GROUP BY 中）。sqlite 测试库无该严格模式，
+        // 故用查询日志捕获投票流程真实 SQL，钉住所有带 GROUP BY 的查询不得出现 select *
+        $activity = $this->makeActivity(['votes_per_user' => 5, 'ip_limit' => 3]);
+        [$optionA] = $this->makeOptions($activity);
+        $user = $this->createUser();
+
+        DB::enableQueryLog();
+        $this->service->submitVote($activity, [$optionA], [], $user, '9.9.9.9');
+        $this->service->submitVote($activity, [$optionA], [], null, '9.9.9.9');
+        $log = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $grouped = array_filter($log, fn ($entry) => stripos($entry['query'], 'group by') !== false);
+        $this->assertNotEmpty($grouped, '投票流程应触发带 GROUP BY 的批次计数查询（ip_limit > 0）');
+
+        foreach ($grouped as $entry) {
+            $this->assertStringNotContainsStringIgnoringCase(
+                'select *',
+                $entry['query'],
+                '带 GROUP BY 的查询出现 SELECT *，在 MySQL only_full_group_by 模式下将报 1055：' . $entry['query']
+            );
+        }
     }
 
     public function test_投票批次号按提交次数递增(): void
