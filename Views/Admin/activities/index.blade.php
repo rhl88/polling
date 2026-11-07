@@ -10,6 +10,11 @@
     <link rel="stylesheet" href="{{ asset('Admin/css/variables.css') }}">
     <link rel="stylesheet" href="{{ asset('Admin/css/reset.css') }}">
     @include('admin.partials.permission-script')
+    <style>
+        /* layui table render 后 DOM 移出原 elem，选择器须用 .layui-table 类而非 #activity-table */
+        .layui-table .title-link { color: #01AAED; }
+        .layui-table .title-link:hover { text-decoration: underline; }
+    </style>
 </head>
 <body>
 <div class="pear-container">
@@ -120,9 +125,23 @@
             }
         });
 
+        // HTML 转义：标题为用户可控数据，拼接进 templet 前必须转义（XSS 防护原则）
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         var cols = [[
             { title: 'ID', field: 'id', align: 'center', width: 70, sort: true },
-            { title: '活动标题', field: 'title', align: 'left', minWidth: 180 },
+            { title: '活动标题', field: 'title', align: 'left', minWidth: 180, templet: function(d) {
+                return '<a class="title-link" href="/cmspro/polling/' + d.id + '" target="_blank" rel="noopener"'
+                    + ' title="' + escapeHtml(d.title) + '（点击在新窗口查看前台详情）">'
+                    + escapeHtml(d.title) + '</a>';
+            } },
             { title: '类型', field: 'type_text', align: 'center', width: 100, templet: '#typeTpl' },
             { title: '状态', field: 'effective_status_text', align: 'center', width: 90, templet: '#statusTpl' },
             { title: '票数', field: 'records_count', align: 'center', width: 80, sort: true },
