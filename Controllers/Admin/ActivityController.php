@@ -141,7 +141,7 @@ class ActivityController extends Controller
     }
 
     /**
-     * 导出统计报告 CSV
+     * 导出统计报告 CSV（流式下载响应由 VoteService 构造）
      */
     public function exportStats($id)
     {
@@ -150,12 +150,6 @@ class ActivityController extends Controller
             return response()->json(ApiResponse::error(40401, '投票活动不存在'));
         }
 
-        $csv = $this->voteService->exportStatsCsv($activity);
-        $filename = '投票统计_' . $activity->id . '_' . date('Ymd_His') . '.csv';
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . rawurlencode($filename) . '"',
-        ]);
+        return $this->voteService->exportStatsCsv($activity);
     }
 }

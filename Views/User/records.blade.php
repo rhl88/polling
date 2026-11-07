@@ -61,7 +61,15 @@
         var layer = layui.layer;
         var $ = layui.jquery;
 
-        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
+        $.ajaxSetup({
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            statusCode: {
+                401: function() {
+                    layer.msg('登录已过期，请重新登录', { icon: 2 });
+                    setTimeout(function() { location.href = '/user/login'; }, 800);
+                }
+            }
+        });
 
         function loadList(page) {
             $.get('/api/user/cmspro/polling/records', { page: page || 1, per_page: 15 }, function(r) {

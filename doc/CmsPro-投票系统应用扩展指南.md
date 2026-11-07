@@ -93,7 +93,7 @@ $voteService = app(VoteService::class);
 | 统计 | `getStats(PollingActivity $activity): array` | 触发 `polling.activity.stats` Filter 后返回 |
 | 结果可见 | `canViewResult(PollingActivity $activity, ?User $user, string $ip): bool` | 四种可见性判定 |
 | 是否已投 | `hasVoted(PollingActivity $activity, ?User $user, string $ip): bool` | 登录按用户、游客按 IP |
-| 导出 CSV | `exportStatsCsv(PollingActivity $activity): string` | 含 BOM 头的完整 CSV 文本，匿名活动自动脱敏 |
+| 导出 CSV | `exportStatsCsv(PollingActivity $activity): StreamedResponse` | 流式下载响应（`text/csv` 附件 + UTF-8 BOM 头，分块写出、内存与活动规模解耦），匿名活动自动脱敏；类型为 `Symfony\Component\HttpFoundation\StreamedResponse`，控制器直接 return 即可触发浏览器下载 |
 
 `getStats()` 返回结构：
 

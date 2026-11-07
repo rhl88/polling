@@ -177,7 +177,15 @@
         var laydate = layui.laydate;
         var $ = layui.jquery;
 
-        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
+        $.ajaxSetup({
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            statusCode: {
+                401: function() {
+                    layer.msg('登录已过期，请重新登录', { icon: 2 });
+                    setTimeout(function() { location.href = '/user/login'; }, 800);
+                }
+            }
+        });
 
         var activityId = '{{ $activityId }}';
         var isEdit = activityId !== '';

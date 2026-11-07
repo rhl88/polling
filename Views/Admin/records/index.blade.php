@@ -57,13 +57,21 @@
 <script src="{{ asset('CmsProUi/component/layui/layui.js') }}"></script>
 <script src="{{ asset('CmsProUi/component/pear/pear.js') }}"></script>
 <script>
-    layui.use(['table', 'form', 'laydate', 'jquery'], function() {
+    layui.use(['table', 'form', 'laydate', 'layer', 'jquery'], function() {
         var table = layui.table;
         var form = layui.form;
         var laydate = layui.laydate;
         var $ = layui.jquery;
 
-        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
+        $.ajaxSetup({
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            statusCode: {
+                401: function() {
+                    layer.msg('登录已过期，请重新登录', { icon: 2 });
+                    setTimeout(function() { location.href = '/admin/login'; }, 800);
+                }
+            }
+        });
 
         laydate.render({ elem: '#startDate' });
         laydate.render({ elem: '#endDate' });

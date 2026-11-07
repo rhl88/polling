@@ -8,6 +8,7 @@ use App\Apps\CmsproPolling\Services\VoteService;
 use App\Apps\CmsproPolling\Tests\PollingTestCase;
 use App\Services\HookManager;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * 投票核心服务测试。
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\DB;
  * 6. 统计：参与人次去重、多选占比、排序投票 Borda 计分与名次分布
  * 7. 结果可见性四种模式的判定
  * 8. 自定义钩子触发（polling.vote.submitted / polling.activity.stats）
- * 9. CSV 导出：BOM 头、匿名脱敏
+ * 9. CSV 导出：流式响应、BOM 头、匿名脱敏
  */
 class VoteServiceTest extends PollingTestCase
 {
@@ -519,7 +520,7 @@ class VoteServiceTest extends PollingTestCase
 
         $this->service->submitVote($activity, [$optionA], [], $user, '1.1.1.1');
 
-        $csv = $this->service->exportStatsCsv($activity);
+        $csv = $this->renderCsv($this->service->exportStatsCsv($activity));
 
         // UTF-8 BOM 头，保证 Excel 打开中文不乱码
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
@@ -537,7 +538,7 @@ class VoteServiceTest extends PollingTestCase
 
         $this->service->submitVote($activity, [$optionA], [], $user, '1.1.1.1');
 
-        $csv = $this->service->exportStatsCsv($activity);
+        $csv = $this->renderCsv($this->service->exportStatsCsv($activity));
 
         $this->assertStringContainsString($user->username, $csv);
     }
@@ -549,8 +550,73 @@ class VoteServiceTest extends PollingTestCase
 
         $this->service->submitVote($activity, [$optionA], [], null, '9.9.9.9');
 
-        $csv = $this->service->exportStatsCsv($activity);
+        $csv = $this->renderCsv($this->service->exportStatsCsv($activity));
 
         $this->assertStringContainsString('匿名', $csv);
+    }
+
+    public function test_统计查询在库内聚合不全量加载记录表(): void
+    {
+        // R7-1：十万票级活动的统计若全量 get() 拉取记录表，内存与 CPU 压力大；
+        // 统计（总数/人次/选项聚合）必须由库端 COUNT + GROUP BY 完成。
+        // sqlite 测试库无 only_full_group_by 严格模式，查询日志断言同时钉住
+        // 分组查询只选分组列，防 MySQL 1055 回归
+        $activity = $this->makeActivity();
+        [$optionA, $optionB] = $this->makeOptions($activity);
+        $this->service->submitVote($activity, [$optionA], [], null, '1.1.1.1');
+        $this->service->submitVote($activity, [$optionB], [], null, '2.2.2.2');
+
+        DB::enableQueryLog();
+        $stats = $this->service->getStats($activity);
+        $log = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        // 统计结果正确性锚点：两批次两记录
+        $this->assertSame(2, $stats['total_records']);
+        $this->assertSame(2, $stats['total_votes']);
+
+        foreach ($log as $entry) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/select\s+\*\s+from\s+.?app_cmspro_polling_records/i',
+                $entry['query'],
+                'getStats 出现记录表全量加载（SELECT *），应改为库内聚合：' . $entry['query']
+            );
+        }
+    }
+
+    public function test_导出统计为流式下载响应(): void
+    {
+        // R7-2：大活动导出不得在内存累积整份 CSV，改经 php://output 流式写出
+        $activity = $this->makeActivity();
+        [$optionA] = $this->makeOptions($activity);
+        $this->service->submitVote($activity, [$optionA], [], null, '1.1.1.1');
+
+        $response = $this->service->exportStatsCsv($activity);
+
+        $this->assertInstanceOf(StreamedResponse::class, $response);
+        $this->assertSame('text/csv; charset=UTF-8', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString(
+            'attachment',
+            (string) $response->headers->get('Content-Disposition'),
+            '导出响应必须是附件下载（attachment）'
+        );
+
+        $csv = $this->renderCsv($response);
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
+        $this->assertStringContainsString('投票统计报告', $csv);
+        $this->assertStringContainsString('记录ID,选项,用户名,第几次投票,名次,IP,投票时间', $csv);
+    }
+
+    /**
+     * 捕获流式 CSV 响应内容。
+     *
+     * StreamedResponse 无 getContent()，经输出缓冲区捕获回调写出的流。
+     */
+    protected function renderCsv(StreamedResponse $response): string
+    {
+        ob_start();
+        $response->sendContent();
+
+        return (string) ob_get_clean();
     }
 }

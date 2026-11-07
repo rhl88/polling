@@ -28,11 +28,11 @@ CmsproPolling/
 │   └── Home/           # 前台控制器（列表、详情、投票、统计）
 ├── doc/                # 应用文档（特性清单、使用指南、扩展指南）
 ├── Exceptions/         # 业务异常（VoteException）
-├── Migrations/         # 数据库迁移（活动、选项、记录三表）
+├── Migrations/         # 数据库迁移（活动、选项、记录三表 + 筛选/排序索引）
 ├── Models/             # 模型（PollingActivity、PollingOption、PollingRecord）
 ├── Routes/             # 路由（admin、admin_api、user、user_api、home、home_api）
 ├── Services/           # 业务服务（ActivityService、VoteService）
-├── Tests/              # 应用级测试（66 用例 / 211 断言）
+├── Tests/              # 应用级测试（71 用例 / 232 断言）
 ├── Views/
 │   ├── Admin/          # 后台视图（活动列表/表单/统计、记录）
 │   ├── Home/           # 前台视图（列表、详情、结果片段）
@@ -86,3 +86,4 @@ php artisan test app/Apps/CmsproPolling/Tests
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0.0 | 2026-11-05 | 初始版本 |
+| 1.0.0 | 2026-11-07 | 复验整改（同版本内修复）：会话过期 401 统一跳转登录页、动效时长收敛、色板对齐框架规范、统计改库端聚合、CSV 导出改流式响应、活动表补 type/create_time 索引、前台 H5 断点体系（UI 规范 10.3）与可访问性增强、文档数字同步（测试 71 用例 / 232 断言） |

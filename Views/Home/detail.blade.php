@@ -235,7 +235,7 @@
         border-radius: 9px;
         background: linear-gradient(90deg, var(--poll-primary), #748ffc);
         transform-origin: left center;
-        animation: bar-grow .6s ease both;
+        animation: bar-grow .3s ease both;
     }
     .bar-fill.rank { background: linear-gradient(90deg, #9c36b5, #d0bfff); }
     @keyframes bar-grow {

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\HookManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class VoteService
 {
@@ -141,16 +142,42 @@ class VoteService
     {
         $options = $activity->options->values();
         $optionCount = $options->count();
+        $isRanking = $activity->isRanking();
 
-        $records = PollingRecord::where('activity_id', $activity->id)->get();
+        // 总记录数：库端 COUNT 聚合，不整表拉取记录
+        $totalRecords = PollingRecord::where('activity_id', $activity->id)->count();
 
-        // 参与人次：按（IP+用户+批次）去重
-        $totalVotes = $records->groupBy(fn ($record) => $record->ip . '|' . $record->user_id . '|' . $record->vote_no)->count();
+        // 参与人次：按（IP+用户+批次）元组去重后计数。
+        // 不用 count(distinct ip, user_id, vote_no)：SQLite 的 DISTINCT 聚合只支持单参数，
+        // 以分组子查询计数同时兼容 SQLite 测试库与 MySQL only_full_group_by 模式
+        $totalVotes = DB::query()
+            ->fromSub(
+                PollingRecord::query()
+                    ->where('activity_id', $activity->id)
+                    ->select(['ip', 'user_id', 'vote_no'])
+                    ->groupBy(['ip', 'user_id', 'vote_no']),
+                'batches'
+            )
+            ->count();
+
+        // 选项维度聚合：按（选项+名次）分组在库端计数，PHP 端只做小规模汇总
+        $aggRows = PollingRecord::query()
+            ->where('activity_id', $activity->id)
+            ->select(['option_id', 'rank', DB::raw('COUNT(*) as cnt')])
+            ->groupBy(['option_id', 'rank'])
+            ->get();
+
+        $aggByOption = [];
+        foreach ($aggRows as $row) {
+            $optionId = (int) $row->option_id;
+            $aggByOption[$optionId] ??= ['count' => 0, 'ranks' => []];
+            $aggByOption[$optionId]['count'] += (int) $row->cnt;
+            $aggByOption[$optionId]['ranks'][(int) $row->rank] = (int) $row->cnt;
+        }
 
         $optionStats = [];
         foreach ($options as $option) {
-            $optionRecords = $records->where('option_id', $option->id);
-            $count = $optionRecords->count();
+            $agg = $aggByOption[(int) $option->id] ?? ['count' => 0, 'ranks' => []];
 
             $stat = [
                 'id' => $option->id,
@@ -158,31 +185,24 @@ class VoteService
                 'description' => $option->description,
                 'image' => $option->image,
                 'sort' => $option->sort,
-                'count' => $count,
+                'count' => $agg['count'],
                 'percent' => 0.0,
             ];
 
-            if ($activity->isRanking()) {
-                // Borda 计分：选项总数 - 名次；并统计各名次分布
-                $score = 0;
-                $rankDistribution = [];
-                foreach ($optionRecords as $record) {
-                    $score += max(0, $optionCount - (int) $record->rank);
-                    $rankDistribution[(int) $record->rank] = ($rankDistribution[(int) $record->rank] ?? 0) + 1;
-                }
-                ksort($rankDistribution);
+            if ($isRanking) {
+                // Borda 计分：选项总数 - 名次（同库端合并后的名次计数 × 得分累加）
+                [$score, $rankDistribution] = $this->computeRankingScore($agg['ranks'], $optionCount);
                 $stat['score'] = $score;
                 $stat['rank_distribution'] = $rankDistribution;
             } else {
-                $totalOptionRecords = $records->count();
-                $stat['percent'] = $totalOptionRecords > 0 ? round($count * 100 / $totalOptionRecords, 2) : 0.0;
+                $stat['percent'] = $totalRecords > 0 ? round($agg['count'] * 100 / $totalRecords, 2) : 0.0;
             }
 
             $optionStats[] = $stat;
         }
 
-        // 排序投票按得分降序排列展示
-        if ($activity->isRanking()) {
+        // 排序投票按得分降序排列展示，其他类型按票数降序
+        if ($isRanking) {
             usort($optionStats, fn ($a, $b) => $b['score'] <=> $a['score']);
         } else {
             usort($optionStats, fn ($a, $b) => $b['count'] <=> $a['count']);
@@ -190,13 +210,32 @@ class VoteService
 
         $stats = [
             'type' => $activity->type,
-            'total_records' => $records->count(),
+            'total_records' => $totalRecords,
             'total_votes' => $totalVotes,
             'options' => $optionStats,
         ];
 
         // 触发自定义 Filter 钩子：允许其他应用加工统计数据
         return (array) $this->hooks->applyFilter('polling.activity.stats', $stats, $activity);
+    }
+
+    /**
+     * Borda 计分与名次分布（基于库端按名次合并后的计数）
+     *
+     * @param array<int, int> $rankCounts 名次 => 该名次记录数
+     * @return array{0: int, 1: array<int, int>} [综合得分, 名次分布]
+     */
+    protected function computeRankingScore(array $rankCounts, int $optionCount): array
+    {
+        $score = 0;
+        $rankDistribution = [];
+        foreach ($rankCounts as $rank => $cnt) {
+            $score += $cnt * max(0, $optionCount - $rank);
+            $rankDistribution[$rank] = $cnt;
+        }
+        ksort($rankDistribution);
+
+        return [$score, $rankDistribution];
     }
 
     /**
@@ -222,63 +261,103 @@ class VoteService
     }
 
     /**
-     * 导出统计报告 CSV
+     * 导出统计报告 CSV（流式响应）
+     *
+     * 统计摘要 + 记录明细经 php://output 流式写出，
+     * 内存占用与活动规模解耦（不整份累积 CSV 文本）；
+     * 前端 window.open 直接触发浏览器按附件保存
      */
-    public function exportStatsCsv(PollingActivity $activity): string
+    public function exportStatsCsv(PollingActivity $activity): StreamedResponse
     {
         $stats = $this->getStats($activity);
+        $filename = '投票统计_' . $activity->id . '_' . date('Ymd_His') . '.csv';
 
-        $lines = [];
-        $lines[] = '投票统计报告';
-        $lines[] = '活动标题,' . $this->csvCell($activity->title);
-        $lines[] = '投票类型,' . (ActivityService::TYPE_MAP[$activity->type] ?? $activity->type);
-        $lines[] = '开始时间,' . ($activity->start_time ?: '-');
-        $lines[] = '结束时间,' . ($activity->end_time ?: '-');
-        $lines[] = '参与人次,' . $stats['total_votes'];
-        $lines[] = '总记录数,' . $stats['total_records'];
-        $lines[] = '';
+        $render = function () use ($activity, $stats) {
+            $out = fopen('php://output', 'w');
+
+            // UTF-8 BOM 头：保证 Excel 以 UTF-8 打开中文不乱码
+            fwrite($out, "\xEF\xBB\xBF");
+
+            // RFC 4180：显式空 escape（规避反斜杠转义语义），行尾统一 CRLF
+            $writeRow = fn (array $fields) => fputcsv($out, $fields, ',', '"', '', "\r\n");
+
+            $this->writeStatsSummary($writeRow, $activity, $stats);
+            $this->writeRecordRows($writeRow, $activity);
+
+            fclose($out);
+        };
+
+        return response()->streamDownload($render, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * 写出统计摘要段（报告头 + 选项统计表）
+     *
+     * @param \Closure $writeRow 单行写出器
+     */
+    protected function writeStatsSummary(\Closure $writeRow, PollingActivity $activity, array $stats): void
+    {
+        $writeRow(['投票统计报告']);
+        $writeRow(['活动标题', (string) $activity->title]);
+        $writeRow(['投票类型', ActivityService::TYPE_MAP[$activity->type] ?? $activity->type]);
+        $writeRow(['开始时间', (string) ($activity->start_time ?: '-')]);
+        $writeRow(['结束时间', (string) ($activity->end_time ?: '-')]);
+        $writeRow(['参与人次', $stats['total_votes']]);
+        $writeRow(['总记录数', $stats['total_records']]);
+        $writeRow([]);
 
         if ($activity->isRanking()) {
-            $lines[] = '选项,综合得分,被排名次数明细';
+            $writeRow(['选项', '综合得分', '被排名次数明细']);
             foreach ($stats['options'] as $option) {
                 $distribution = collect($option['rank_distribution'] ?? [])
                     ->map(fn ($count, $rank) => "第{$rank}名:{$count}次")
                     ->implode(' / ');
-                $lines[] = $this->csvCell($option['title']) . ',' . $option['score'] . ',' . $this->csvCell($distribution);
+                $writeRow([$option['title'], $option['score'], $distribution]);
             }
         } else {
-            $lines[] = '选项,票数,占比(%)';
+            $writeRow(['选项', '票数', '占比(%)']);
             foreach ($stats['options'] as $option) {
-                $lines[] = $this->csvCell($option['title']) . ',' . $option['count'] . ',' . $option['percent'];
+                $writeRow([$option['title'], $option['count'], $option['percent']]);
             }
         }
+    }
 
-        $lines[] = '';
-        $lines[] = '投票记录明细';
-        $lines[] = '记录ID,选项,用户名,第几次投票,名次,IP,投票时间';
+    /**
+     * 写出投票记录明细段（chunkById 游标分块流式拉取）
+     *
+     * @param \Closure $writeRow 单行写出器
+     */
+    protected function writeRecordRows(\Closure $writeRow, PollingActivity $activity): void
+    {
+        $writeRow([]);
+        $writeRow(['投票记录明细']);
+        $writeRow(['记录ID', '选项', '用户名', '第几次投票', '名次', 'IP', '投票时间']);
 
-        PollingRecord::where('activity_id', $activity->id)
+        // chunkById 以主键游标分页：相比 offset 分页的 chunk，
+        // 导出期间并发写入的新记录不会因页偏移漂移而漏行或重行
+        PollingRecord::query()
+            ->where('activity_id', $activity->id)
             ->with(['option', 'user'])
             ->orderBy('id')
-            ->chunk(500, function ($records) use (&$lines, $activity) {
+            ->chunkById(500, function ($records) use ($writeRow, $activity) {
                 foreach ($records as $record) {
                     $username = $record->user_id > 0 ? ($record->user?->username ?? '-') : ($activity->anonymous ? '匿名' : '游客');
                     if ($activity->anonymous && $record->user_id > 0) {
                         $username = '匿名';
                     }
-                    $lines[] = implode(',', [
+                    $writeRow([
                         $record->id,
-                        $this->csvCell($record->option?->title ?? '-'),
-                        $this->csvCell($username),
+                        $record->option?->title ?? '-',
+                        $username,
                         $record->vote_no,
                         $record->rank > 0 ? $record->rank : '-',
-                        $this->csvCell($record->ip ?? '-'),
+                        $record->ip ?? '-',
                         (string) $record->create_time,
                     ]);
                 }
             });
-
-        return "\xEF\xBB\xBF" . implode("\r\n", $lines);
     }
 
     /**
@@ -359,17 +438,6 @@ class VoteService
         }
 
         return $ranks;
-    }
-
-    /**
-     * CSV 单元格转义
-     */
-    protected function csvCell(string $value): string
-    {
-        $value = str_replace('"', '""', $value);
-        return str_contains($value, ',') || str_contains($value, '"') || str_contains($value, "\n")
-            ? '"' . $value . '"'
-            : $value;
     }
 }
 

@@ -49,14 +49,14 @@
             overflow: hidden;
         }
         .bar-fill {
-            background: linear-gradient(90deg, #1e9fff, #16baaa);
+            background: linear-gradient(90deg, #1e9fff, var(--global-primary-color));
             height: 100%;
             border-radius: 10px;
             min-width: 2px;
             transition: width .5s;
         }
         .bar-fill.rank {
-            background: linear-gradient(90deg, #2f4056, #ffb800);
+            background: linear-gradient(90deg, #5f5f5f, #ffb800);
         }
     </style>
 </head>
@@ -95,7 +95,15 @@
         var layer = layui.layer;
         var $ = layui.jquery;
 
-        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
+        $.ajaxSetup({
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            statusCode: {
+                401: function() {
+                    layer.msg('登录已过期，请重新登录', { icon: 2 });
+                    setTimeout(function() { location.href = '/admin/login'; }, 800);
+                }
+            }
+        });
 
         var activityId = '{{ $activityId }}';
 

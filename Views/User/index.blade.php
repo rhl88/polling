@@ -71,7 +71,15 @@
         var layer = layui.layer;
         var $ = layui.jquery;
 
-        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
+        $.ajaxSetup({
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            statusCode: {
+                401: function() {
+                    layer.msg('登录已过期，请重新登录', { icon: 2 });
+                    setTimeout(function() { location.href = '/user/login'; }, 800);
+                }
+            }
+        });
 
         var currentPage = 1;
         var typeText = { single: '单选投票', multiple: '多选投票', ranking: '排序投票' };

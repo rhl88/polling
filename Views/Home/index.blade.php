@@ -60,10 +60,30 @@
     .page-head { margin-bottom: 22px; }
     .page-title { font-size: 24px; font-weight: 700; }
     .page-sub { color: var(--poll-text-light); font-size: 14px; margin-top: 6px; }
+    /* 响应式网格（UI 规范 10.3，移动端优先）：手机基准双列，平板/桌面逐级升列 */
     .activity-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    /* 超小屏（< 360px）：压缩间距与字号 */
+    @media (max-width: 359.98px) {
+        .activity-grid { gap: 8px; }
+        .activity-item { padding: 12px; }
+        .item-title { font-size: 14px; }
+        .item-desc { font-size: 12px; }
+        .item-meta { font-size: 11px; }
+    }
+    /* 平板（≥ 768px）：升级 3 列，卡片间距增至 14px */
+    @media (min-width: 768px) {
+        .activity-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+    }
+    /* 桌面（≥ 1024px）：升级 4 列（容器 640px 居中，见布局层） */
+    @media (min-width: 1024px) {
+        .activity-grid { grid-template-columns: repeat(4, 1fr); }
     }
     .activity-item {
         background: var(--poll-card);

@@ -12,7 +12,7 @@
     @include('admin.partials.permission-script')
     <style>
         /* layui table render 后 DOM 移出原 elem，选择器须用 .layui-table 类而非 #activity-table */
-        .layui-table .title-link { color: #01AAED; }
+        .layui-table .title-link { color: #1e9fff; }
         .layui-table .title-link:hover { text-decoration: underline; }
     </style>
 </head>
@@ -116,7 +116,15 @@
         var layer = layui.layer;
         var $ = layui.jquery;
 
-        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
+        $.ajaxSetup({
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            statusCode: {
+                401: function() {
+                    layer.msg('登录已过期，请重新登录', { icon: 2 });
+                    setTimeout(function() { location.href = '/admin/login'; }, 800);
+                }
+            }
+        });
 
         // 隐藏无权限按钮
         $('button[data-permission]').each(function() {
