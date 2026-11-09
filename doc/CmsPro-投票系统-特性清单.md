@@ -1,7 +1,7 @@
 # CmsPro-投票系统-特性清单
 
-> 版本：1.0.0 | 更新日期：2026-11-05
-> 应用版本：1.0.0 | 应用 ID：cmspro.polling
+> 版本：1.0.1 | 更新日期：2026-11-09
+> 应用版本：1.0.1 | 应用 ID：cmspro.polling
 
 ---
 
@@ -16,15 +16,15 @@
 | 安装卸载 | 执行迁移 + 配置三向同步 + 种子示例活动 | `Install.php` |
 | 配置 | `Config/polling.php` + manifest config_groups | `Config/polling.php`、`manifest.json` |
 | 权限 | 4 项权限码 + 应用级权限校验中间件 | `manifest.json` `permissions`、`Http/Middleware/CheckManagePermission.php` |
-| 菜单 | 后台 1 目录 2 子菜单 + 用户端 1 菜单 + 官网 1 菜单 | `manifest.json` `menus`/`user_menus`/`home_menus` |
+| 菜单 | 后台 1 目录 3 子菜单 + 用户端 1 菜单 + 官网 1 菜单 | `manifest.json` `menus`/`user_menus`/`home_menus` |
 | 依赖 | 无外部应用依赖 | `manifest.json` `dependencies` |
-| 应用级测试 | 72 个用例（234 项断言），含内存库安全护栏 | `Tests/` |
+| 应用级测试 | 78 个用例（260 项断言），含内存库安全护栏 | `Tests/` |
 
 ## 二、三终端全覆盖
 
 | 终端 | 入口 | 说明 |
 |------|------|------|
-| 后台管理 | `/admin/cmspro/polling` | 活动管理、投票记录、统计导出 |
+| 后台管理 | `/admin/cmspro/polling` | 活动管理、投票记录、投票设置、统计导出 |
 | 用户端 | `/user/cmspro/polling` | 我发起的投票、参与记录（受 `allow_user_create` 配置控制） |
 | 官网前台 | `/cmspro/polling` | 公开投票列表、详情、游客可投票 |
 
@@ -93,8 +93,12 @@
 | 允许用户端发起投票 | `app_cmspro_polling_allow_user_create` | 1 | 关闭后仅后台管理员可创建活动 |
 
 消费方式：三个配置项均通过 `ActivityService::getConfig()` 直读数据库（`config_items` 表），
-后台「投票设置」页保存后立即生效，无需重启或清缓存；用户端发起投票表单的
+保存后立即生效，无需重启或清缓存；用户端发起投票表单的
 限投次数与 IP 限制输入框按配置值预填。
+
+管理入口：后台「投票管理 → 投票设置」独立菜单（`/admin/cmspro/polling/settings`），
+设置读写 API 位于 `/admin/cmspro/polling/api/settings`（GET 读取 / PUT 更新），
+写入带白名单（仅 manifest 注册配置项）与类型校验（number 非负整数、switch 0/1）双重防护。
 
 ## 九、权限系统
 
@@ -138,6 +142,7 @@
 |----------|------|
 | `Views/Admin/activities/` | 活动列表、表单（分区布局 + 动态选项行）、统计页 |
 | `Views/Admin/records/` | 投票记录列表 |
+| `Views/Admin/settings/` | 投票设置页（配置表单 + 401 统一跳转） |
 | `Views/User/` | 我的投票列表、发起/编辑表单、参与记录 |
 | `Views/Home/` | 前台列表、详情（核心投票交互）、结果片段 |
 | `Views/layouts/home.blade.php` | 前台独立布局（CSS 变量主题 + 登录态判断） |
@@ -151,6 +156,7 @@
 | `Tests/Feature/HomePollingApiTest.php` | 9 | 前台页面渲染、游客投票 API、参数校验（CMSPRO 统一 40201 格式）、统计 API 可见性控制、单选切换语义回归锚点 |
 | `Tests/Feature/UserPollingApiTest.php` | 4 | 用户中心创建/开关拦截（allow_user_create）、普通（非 JSON）表单提交校验失败 302 回归 |
 | `Tests/Feature/PollingMigrationTest.php` | 1 | 迁移结构断言：activities 表 type/create_time 筛选与排序索引齐备 |
+| `Tests/Feature/AdminSettingApiTest.php` | 6 | 投票设置全链路：manifest 设置子菜单声明、设置页鉴权访问、配置读取接口、更新落库与立即生效、白名单外配置键整单拒绝、配置值类型校验 |
 | `Tests/PollingTestCase.php` | 基类 | 内存库安全护栏、应用迁移补跑、数据构造助手 |
 
 运行方式：`php artisan test app/Apps/CmsproPolling/Tests`（锁定 phpunit.xml 的 sqlite :memory:）。
@@ -163,3 +169,4 @@
 | 1.0.0 | 2026-11-05 | 开发团队 | 六维度验收整改（同版本内修复）：新增应用级权限校验中间件、存储型 XSS 修复（前端统一 DOM 赋值）、emoji 改 FontAwesome、配置项改数据库直读并接入表单预填、已投票选项删除保护、Layui 分页参数对齐、per_page 钳制、记录列表 N+1 消除、交互细节（防重提交、错误回调解析、iframe 弹层精确关闭、键盘可达性、prefers-reduced-motion）、测试补齐 |
 | 1.0.0 | 2026-11-07 | 开发团队 | 复验整改（同版本内修复）：会话过期 401 统一跳转登录页（7 页面）、动效时长收敛至 0.3s、色板对齐框架规范（主色 var/信息蓝/中性灰）、getStats 改库端聚合、CSV 导出改 StreamedResponse 流式输出、活动表补 type/create_time 索引、前台 H5 断点体系（UI 规范 10.3：640px 容器 + 360/767/1024 断点）、可访问性增强（nav aria-label、aria-current、--header-height）、测试补齐至 71 用例 |
 | 1.0.0 | 2026-11-07 | 开发团队 | 修复前台单选投票可多选的问题（toggleOption 缺 single 分支）：详情页交互改 radio 切换语义（点击新选项替换已选项），新增回归锚点测试，测试补齐至 72 用例 |
+| 1.0.1 | 2026-11-09 | 开发团队 | 新增后台「投票设置」独立菜单（manifest 子菜单 + 设置页 + 设置读写 API，白名单与类型校验双防护）；已安装环境经上传应用包覆盖升级同步菜单（菜单 code 幂等匹配，已有菜单 ID 与角色关联保留）；测试补齐至 78 用例 |

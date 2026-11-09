@@ -2,7 +2,7 @@
     "id": "cmspro.polling",
     "name": "投票系统",
     "description": "多活动用户投票系统，支持单选/多选/排序投票、防刷票、匿名投票与实时统计，适用于问卷调查、社区话题决策、活动评选等场景",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "icon": "fa fa-check-square-o",
     "author": "CmsPro",
     "require": {
@@ -38,6 +38,13 @@
                     "path": "/admin/cmspro/polling/records",
                     "code": "admin_cmspro_polling_records",
                     "order": 2
+                },
+                {
+                    "title": "投票设置",
+                    "icon": "fa fa-cog",
+                    "path": "/admin/cmspro/polling/settings",
+                    "code": "admin_cmspro_polling_settings",
+                    "order": 3
                 }
             ]
         }

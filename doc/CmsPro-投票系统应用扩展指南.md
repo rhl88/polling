@@ -136,6 +136,17 @@ $activityService = app(ActivityService::class);
 | 记录列表 | `getRecordList(array $params): array` | activity_id / option_id / user_id / ip / 日期 |
 | 格式化 | `formatActivity(PollingActivity $activity, bool $withOptions = false): array` | 追加 effective_status / type_text / is_votable 等展示字段 |
 
+### 3.3 投票设置（HTTP API）
+
+配置存于 `config_items` 表（code 前缀 `app_cmspro_polling_`），由后台「投票管理 → 投票设置」独立菜单管理：
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/admin/cmspro/polling/api/settings` | GET | 读取全部投票配置（去前缀 key => value） |
+| `/admin/cmspro/polling/api/settings` | PUT | 更新配置，body 为 `{"settings": {"ip_limit": 5, ...}}` |
+
+写入有双重防护：**白名单**（仅允许 manifest `config_groups` 注册的配置项，白名单外的键整单 422 拒绝）与**类型校验**（number 非负整数、switch 仅 0/1）。二次开发新增配置项时，在 `manifest.json` 的 `config_groups` 补声明即可自动进入白名单，无需改动控制器。
+
 ## 四、模型 API
 
 ```php

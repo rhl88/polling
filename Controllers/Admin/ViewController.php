@@ -45,4 +45,12 @@ class ViewController extends Controller
     {
         return view('cmspro.polling::Admin.records.index');
     }
+
+    /**
+     * 投票设置页
+     */
+    public function settingsIndex()
+    {
+        return view('cmspro.polling::Admin.settings.index');
+    }
 }

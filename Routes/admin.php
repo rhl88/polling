@@ -11,3 +11,6 @@ Route::get('/activities/stats/{id}', [ViewController::class, 'activityStats']);
 
 // 投票记录页面
 Route::get('/records', [ViewController::class, 'recordIndex']);
+
+// 投票设置页面
+Route::get('/settings', [ViewController::class, 'settingsIndex']);

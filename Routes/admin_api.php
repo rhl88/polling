@@ -2,6 +2,7 @@
 
 use App\Apps\CmsproPolling\Controllers\Admin\ActivityController;
 use App\Apps\CmsproPolling\Controllers\Admin\RecordController;
+use App\Apps\CmsproPolling\Controllers\Admin\SettingController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->group(function () {
@@ -20,5 +21,11 @@ Route::prefix('api')->group(function () {
     // 投票记录
     Route::prefix('records')->controller(RecordController::class)->group(function () {
         Route::get('/', 'index');
+    });
+
+    // 投票设置（polling_settings 配置组）
+    Route::prefix('settings')->controller(SettingController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::put('/', 'update');
     });
 });
