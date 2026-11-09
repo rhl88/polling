@@ -454,4 +454,31 @@ class ActivityServiceTest extends PollingTestCase
 
         $this->assertSame('0', ActivityService::getConfig('allow_user_create', '1'));
     }
+
+    public function test_记录列表投票时间为标准日期时间格式(): void
+    {
+        $activity = $this->makeActivity();
+        $optionIds = $this->makeOptions($activity);
+
+        // 固定投票时间，断言输出为 Y-m-d H:i:s 标准格式字符串
+        // （datetime cast 属性直接访问得到 Carbon 对象，进 JSON 会变 ISO8601，
+        //   记录列表须显式格式化为标准格式，与后台视图展示约定一致）
+        // create_time 不在 fillable 白名单，走实例属性赋值以防被 CREATED_AT 自动填充覆盖
+        $record = new PollingRecord();
+        $record->activity_id = $activity->id;
+        $record->option_id = $optionIds[0];
+        $record->user_id = 0;
+        $record->vote_no = 1;
+        $record->rank = 0;
+        $record->ip = '1.1.1.1';
+        $record->create_time = '2026-11-14 10:29:32';
+        $record->update_time = '2026-11-14 10:29:32';
+        $record->save();
+
+        $result = $this->service->getRecordList([]);
+
+        $items = $result['data']['items'];
+        $this->assertCount(1, $items);
+        $this->assertSame('2026-11-14 10:29:32', $items[0]['create_time']);
+    }
 }

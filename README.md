@@ -32,7 +32,7 @@ CmsproPolling/
 ├── Models/             # 模型（PollingActivity、PollingOption、PollingRecord）
 ├── Routes/             # 路由（admin、admin_api、user、user_api、home、home_api）
 ├── Services/           # 业务服务（ActivityService、VoteService）
-├── Tests/              # 应用级测试（78 用例 / 260 断言）
+├── Tests/              # 应用级测试（80 用例 / 265 断言）
 ├── Views/
 │   ├── Admin/          # 后台视图（活动列表/表单/统计、记录、设置）
 │   ├── Home/           # 前台视图（列表、详情、结果片段）
@@ -91,3 +91,4 @@ php artisan test app/Apps/CmsproPolling/Tests
 | 1.0.0 | 2026-11-07 | 复验整改（同版本内修复）：会话过期 401 统一跳转登录页、动效时长收敛、色板对齐框架规范、统计改库端聚合、CSV 导出改流式响应、活动表补 type/create_time 索引、前台 H5 断点体系（UI 规范 10.3）与可访问性增强、文档数字同步（测试 71 用例 / 232 断言） |
 | 1.0.0 | 2026-11-07 | 修复前台单选投票可多选的问题：详情页交互增加 single 分支（radio 切换语义，点击新选项替换已选项），新增回归锚点测试，测试补齐至 72 用例 |
 | 1.0.1 | 2026-11-09 | 新增后台「投票设置」独立菜单：manifest 子菜单声明 + 设置页（polling_settings 三项配置）+ 设置读写 API（白名单与类型校验）；已安装环境通过上传应用包覆盖升级同步菜单（菜单 code 幂等匹配，已有菜单与角色关联保留）；测试补齐至 78 用例 |
+| 1.0.1 | 2026-11-09 | 修复投票时间格式（同版本内修复）：后台记录列表与用户端参与记录接口的 create_time 直接暴露 Carbon 对象导致 JSON 输出 ISO8601 格式，统一显式格式化为标准 Y-m-d H:i:s；新增两处标准格式回归测试，测试补齐至 80 用例 |

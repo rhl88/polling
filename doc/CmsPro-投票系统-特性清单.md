@@ -18,7 +18,7 @@
 | 权限 | 4 项权限码 + 应用级权限校验中间件 | `manifest.json` `permissions`、`Http/Middleware/CheckManagePermission.php` |
 | 菜单 | 后台 1 目录 3 子菜单 + 用户端 1 菜单 + 官网 1 菜单 | `manifest.json` `menus`/`user_menus`/`home_menus` |
 | 依赖 | 无外部应用依赖 | `manifest.json` `dependencies` |
-| 应用级测试 | 78 个用例（260 项断言），含内存库安全护栏 | `Tests/` |
+| 应用级测试 | 80 个用例（265 项断言），含内存库安全护栏 | `Tests/` |
 
 ## 二、三终端全覆盖
 
@@ -152,9 +152,9 @@
 | 测试文件 | 用例数 | 覆盖内容 |
 |----------|--------|----------|
 | `Tests/Feature/VoteServiceTest.php` | 34 | 三种投票类型校验链、状态/时间/登录拦截、防刷（限投/IP/批次）、only_full_group_by 兼容、Borda 计分、四种结果可见性、钩子触发、CSV 导出脱敏、统计库端聚合、流式导出响应 |
-| `Tests/Feature/ActivityServiceTest.php` | 24 | 活动 CRUD、选项携带 ID 原地更新与整体替换、已投票选项强制保留、已有记录禁改类型、越权拦截（limitUserId）、状态流转、级联删除、列表过滤、per_page 钳制、数据库配置读取 |
+| `Tests/Feature/ActivityServiceTest.php` | 25 | 活动 CRUD、选项携带 ID 原地更新与整体替换、已投票选项强制保留、已有记录禁改类型、越权拦截（limitUserId）、状态流转、级联删除、列表过滤、per_page 钳制、数据库配置读取、记录列表投票时间标准格式（Y-m-d H:i:s） |
 | `Tests/Feature/HomePollingApiTest.php` | 9 | 前台页面渲染、游客投票 API、参数校验（CMSPRO 统一 40201 格式）、统计 API 可见性控制、单选切换语义回归锚点 |
-| `Tests/Feature/UserPollingApiTest.php` | 4 | 用户中心创建/开关拦截（allow_user_create）、普通（非 JSON）表单提交校验失败 302 回归 |
+| `Tests/Feature/UserPollingApiTest.php` | 5 | 用户中心创建/开关拦截（allow_user_create）、普通（非 JSON）表单提交校验失败 302 回归、参与记录投票时间标准格式（Y-m-d H:i:s） |
 | `Tests/Feature/PollingMigrationTest.php` | 1 | 迁移结构断言：activities 表 type/create_time 筛选与排序索引齐备 |
 | `Tests/Feature/AdminSettingApiTest.php` | 6 | 投票设置全链路：manifest 设置子菜单声明、设置页鉴权访问、配置读取接口、更新落库与立即生效、白名单外配置键整单拒绝、配置值类型校验 |
 | `Tests/PollingTestCase.php` | 基类 | 内存库安全护栏、应用迁移补跑、数据构造助手 |
@@ -170,3 +170,4 @@
 | 1.0.0 | 2026-11-07 | 开发团队 | 复验整改（同版本内修复）：会话过期 401 统一跳转登录页（7 页面）、动效时长收敛至 0.3s、色板对齐框架规范（主色 var/信息蓝/中性灰）、getStats 改库端聚合、CSV 导出改 StreamedResponse 流式输出、活动表补 type/create_time 索引、前台 H5 断点体系（UI 规范 10.3：640px 容器 + 360/767/1024 断点）、可访问性增强（nav aria-label、aria-current、--header-height）、测试补齐至 71 用例 |
 | 1.0.0 | 2026-11-07 | 开发团队 | 修复前台单选投票可多选的问题（toggleOption 缺 single 分支）：详情页交互改 radio 切换语义（点击新选项替换已选项），新增回归锚点测试，测试补齐至 72 用例 |
 | 1.0.1 | 2026-11-09 | 开发团队 | 新增后台「投票设置」独立菜单（manifest 子菜单 + 设置页 + 设置读写 API，白名单与类型校验双防护）；已安装环境经上传应用包覆盖升级同步菜单（菜单 code 幂等匹配，已有菜单 ID 与角色关联保留）；测试补齐至 78 用例 |
+| 1.0.1 | 2026-11-09 | 开发团队 | 修复投票时间格式（同版本内修复）：后台记录列表与用户端参与记录接口的 create_time 直接暴露 Carbon 对象导致 JSON 输出 ISO8601 格式，统一显式格式化为标准 Y-m-d H:i:s；新增两处标准格式回归测试，测试补齐至 80 用例 |

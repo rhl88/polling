@@ -350,7 +350,9 @@ class ActivityService
                 'vote_no' => $record->vote_no,
                 'rank' => $record->rank,
                 'ip' => $record->ip,
-                'create_time' => $record->create_time,
+                // datetime cast 属性直接访问得到 Carbon 对象（进 JSON 会变 ISO8601），
+                // 此处显式格式化为标准 Y-m-d H:i:s 格式（与 BaseModel serializeDate 规范一致）
+                'create_time' => $record->create_time?->format('Y-m-d H:i:s'),
             ];
         });
 

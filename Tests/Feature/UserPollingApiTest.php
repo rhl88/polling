@@ -2,6 +2,7 @@
 
 namespace App\Apps\CmsproPolling\Tests\Feature;
 
+use App\Apps\CmsproPolling\Models\PollingRecord;
 use App\Apps\CmsproPolling\Tests\PollingTestCase;
 use App\Models\ConfigItem;
 
@@ -112,5 +113,36 @@ class UserPollingApiTest extends PollingTestCase
             'title' => '用户中心发起的投票',
             'user_id' => $user->id,
         ]);
+    }
+
+    public function test_参与记录投票时间为标准日期时间格式(): void
+    {
+        $user = $this->createUser('recordviewer');
+        $activity = $this->makeActivity();
+        $optionIds = $this->makeOptions($activity);
+
+        // 固定投票时间；create_time 不在 fillable 白名单，走实例属性赋值
+        // 以防被 CREATED_AT 自动填充覆盖
+        $record = new PollingRecord();
+        $record->activity_id = $activity->id;
+        $record->option_id = $optionIds[0];
+        $record->user_id = $user->id;
+        $record->vote_no = 1;
+        $record->rank = 0;
+        $record->ip = '1.1.1.1';
+        $record->create_time = '2026-11-14 10:29:32';
+        $record->update_time = '2026-11-14 10:29:32';
+        $record->save();
+
+        $response = $this->actingAs($user, 'web')
+            ->getJson('/api/user/cmspro/polling/records');
+
+        $response->assertOk();
+
+        // datetime cast 属性直接访问得到 Carbon 对象（进 JSON 会变 ISO8601），
+        // 参与记录接口须输出标准 Y-m-d H:i:s 格式字符串
+        $items = $response->json('data.items');
+        $this->assertCount(1, $items);
+        $this->assertSame('2026-11-14 10:29:32', $items[0]['create_time']);
     }
 }
