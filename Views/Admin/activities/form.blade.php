@@ -37,7 +37,9 @@
             text-align: right;
         }
         .bottom .button-container {
-            padding: 10px 15px;
+            display: inline-block;
+            line-height: 52px;
+            padding-right: 15px;
         }
         .section-title {
             font-size: 15px;
